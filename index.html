@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Online Blackjack</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 2rem; }
+    .card { display: inline-block; margin: 5px; padding: 10px; background: #222; border: 1px solid #444; border-radius: 5px; }
+    button { margin: 10px; padding: 10px; background: #0f0; border: none; color: #000; font-weight: bold; border-radius: 5px; }
+    #gameArea { margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>Multiplayer Blackjack</h1>
+  <input id="roomInput" placeholder="Room Code" />
+  <button onclick="joinRoom()">Join Game</button>
+
+  <div id="gameArea" style="display:none;">
+    <h2 id="status"></h2>
+    <div id="players"></div>
+    <div id="controls">
+      <button onclick="hit()">Hit</button>
+      <button onclick="stand()">Stand</button>
+    </div>
+    <div id="result" style="margin-top:20px; font-size: 1.2rem;"></div>
+  </div>
+
+  <script>
+    const socket = io('https://YOUR_SERVER_URL_HERE'); // Replace with deployed server
+
+    let myId = null;
+    let room = null;
+
+    socket.on('connect', () => {
+      myId = socket.id;
+    });
+
+    function joinRoom() {
+      room = document.getElementById('roomInput').value;
+      if (!room) return;
+      socket.emit('joinRoom', room);
+      document.getElementById('gameArea').style.display = 'block';
+    }
+
+    socket.on('roomFull', () => {
+      alert('Room is full.');
+    });
+
+    socket.on('update', (data) => {
+      document.getElementById('players').innerHTML = '';
+      data.players.forEach(p => {
+        const el = document.createElement('div');
+        el.innerHTML = `<h3>${p.id === myId ? 'You' : 'Opponent'}</h3>
+                        <div>${p.hand.map(c => `<span class="card">${c}</span>`).join('')}</div>
+                        <p>Total: ${p.total}</p>`;
+        document.getElementById('players').appendChild(el);
+      });
+
+      const myTurn = data.currentTurn === myId;
+      document.getElementById('status').textContent = myTurn ? "Your turn!" : "Waiting for opponent...";
+      document.querySelectorAll('#controls button').forEach(btn => btn.disabled = !myTurn);
+    });
+
+    socket.on('gameOver', (data) => {
+      let message = '';
+      if (data.reason === 'bust') {
+        message = 'You busted! Opponent wins.';
+      } else if (!data.winner) {
+        message = 'It\'s a tie!';
+      } else if (data.winner === myId) {
+        message = 'You win!';
+      } else {
+        message = 'You lose!';
+      }
+      document.getElementById('result').textContent = message;
+      document.querySelectorAll('#controls button').forEach(btn => btn.disabled = true);
+    });
+
+    function hit() {
+      socket.emit('hit', room);
+    }
+
+    function stand() {
+      socket.emit('stand', room);
+    }
+  </script>
+</body>
+</html>
